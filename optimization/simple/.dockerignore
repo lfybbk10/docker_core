@@ -1,0 +1,18 @@
+# Игнорируем файлы IDE
+.idea/
+*.iml
+.vscode/
+
+# Игнорируем временные файлы
+*.class
+*.jar
+target/
+build/
+
+# Игнорируем документацию
+README.md
+*.md
+
+# Игнорируем git
+.git/
+.gitignore
