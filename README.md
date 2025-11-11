@@ -1,30 +1,6 @@
-# Docker образы для Java приложений
+# Deployment Documentation
 
-Этот репозиторий содержит примеры Docker образов для различных Java приложений.
-
-## Структура проекта
-
-- `webserver/` - HTTP веб-сервер
-- `game/` - Игра "Угадай число"
-- `analyzer/` - Анализатор текста
-
-## Как собрать образ
-cd game
-docker build -t game:v1.0 .
-
-## Как запустить контейнер
+## GitHub Container Registry URL
 
 
-# Для веб-сервера
-
-docker run -d -p 8080:8080 webserver:v1.0
-
-
-# Для интерактивной игры
-
-docker run -it game:v1.0
-
-
-# Для анализатора текста
-
-docker run analyzer:v1.0 "текст для анализа"
+ghcr.io/lfybbk10/docker_core:latest
