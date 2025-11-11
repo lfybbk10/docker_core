@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'optimization/simple/**'
+      - 'optimization/**'
       - '.github/workflows/docker-deploy.yml'
 
 env:
@@ -46,7 +46,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: optimization/Dockerfile
+          file: optimization/simple/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
