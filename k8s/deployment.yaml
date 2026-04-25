@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docker-core-server-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: docker-core-server
+  template:
+    metadata:
+      labels:
+        app: docker-core-server
+    spec:
+      containers:
+        - name: docker-core-server
+          image: ghcr.io/lfybbk10/docker_core:latest
+          ports:
+            - containerPort: 8080
