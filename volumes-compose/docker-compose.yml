@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  todo-app:
+    build: .
+    stdin_open: true
+    tty: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DB_HOST=postgres
+      - DB_USER=todo_user
+      - DB_PASS=todo_pass
+      - DB_NAME=todo_db
+    networks:
+      - todo-net
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: todo_db
+      POSTGRES_USER: todo_user
+      POSTGRES_PASSWORD: todo_pass
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - todo-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo_user -d todo_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pg_data:
+
+networks:
+  todo-net:
