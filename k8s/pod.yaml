@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: docker-core-server
+  labels:
+    app: docker-core-server
+spec:
+  containers:
+    - name: docker-core-server
+      image: ghcr.io/lfybbk10/docker_core:latest
+      ports:
+        - containerPort: 8080
