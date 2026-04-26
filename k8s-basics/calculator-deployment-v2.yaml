@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calculator-server-deployment-v2
+  namespace: calculator-server-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mp-calculator
+      version: v2.0
+  template:
+    metadata:
+      labels:
+        app: mp-calculator
+        version: v2.0
+    spec:
+      containers:
+        - name: mp-calculator2
+          image: lfybbk10/calculator:2.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: VERSION
+              value: "v2"

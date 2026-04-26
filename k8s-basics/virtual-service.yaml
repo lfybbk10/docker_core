@@ -1,0 +1,26 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: calculator-vs
+  namespace: calculator-server-app
+spec:
+  hosts:
+    - calculator-server-service
+  http:
+    - match:
+        - headers:
+            x-version:
+              exact: v2
+      route:
+        - destination:
+            host: calculator-server-service
+            subset: v2
+    - route:
+        - destination:
+            host: calculator-server-service
+            subset: v1
+          weight: 80
+        - destination:
+            host: calculator-server-service
+            subset: v2
+          weight: 20
