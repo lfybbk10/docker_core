@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calculator-server-deployment-v1
+  namespace: calculator-server-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mp-calculator
+      version: v1.0
+  template:
+    metadata:
+      labels:
+        app: mp-calculator
+        version: v1.0
+    spec:
+      containers:
+        - name: mp-calculator1
+          image: lfybbk10/calculator:1.0
+          ports:
+            - containerPort: 8080
+          env:
+            - name: VERSION
+              value: "v1"
