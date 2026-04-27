@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calculator-deployment
+  namespace: configurable-calculator-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: calculator-app
+  template:
+    metadata:
+      labels:
+        app: calculator-app
+    spec:
+      containers:
+        - name: calculator-container
+          image: lfybbk10/configurable-calculator
+
+          # Все переменные из ConfigMap
+          envFrom:
+            - configMapRef:
+                name: calculator-config
+
+          env:
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: calculator-secret
+                  key: database-password
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: calculator-secret
+                  key: database-user
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: calculator-secret
+                  key: api-key
+
+          # Монтирование файлов
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/config
+            - name: secret-volume
+              mountPath: /app/secrets
+              readOnly: true
+
+      volumes:
+        - name: config-volume
+          configMap:
+            name: calculator-config
+        - name: secret-volume
+          secret:
+            secretName: calculator-secret
