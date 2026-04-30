@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  application.properties: |
+    app.name=config-vault-app
+    app.timeout=5000
+    feature.enabled=true
