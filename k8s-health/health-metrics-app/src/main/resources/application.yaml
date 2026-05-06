@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: health-metrics-app
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,mappings
+
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
