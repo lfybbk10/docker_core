@@ -1,0 +1,68 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.2.5'
+    id 'io.spring.dependency-management' version '1.1.4'
+    id 'com.google.cloud.tools.jib' version '3.4.2'
+}
+
+group = 'ru.mentee.power'
+version = System.getenv('APP_VERSION') ?: '1.0.0-SNAPSHOT'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+def imageRepository = System.getenv('IMAGE_REPOSITORY') ?: 'ghcr.io/example/cicd-pipeline'
+def imageTags = (System.getenv('IMAGE_TAGS') ?: "latest,${project.version}")
+    .split(',')
+    .collect { it.trim() }
+    .findAll { !it.isEmpty() }
+def registryUsername = System.getenv('REGISTRY_USERNAME') ?: System.getenv('GITHUB_ACTOR')
+def registryPassword = System.getenv('REGISTRY_PASSWORD') ?: System.getenv('GITHUB_TOKEN')
+
+jib {
+    from {
+        image = 'eclipse-temurin:21-jre-alpine'
+    }
+    to {
+        image = imageRepository
+        tags = imageTags as Set<String>
+        if (registryUsername && registryPassword) {
+            auth {
+                username = registryUsername
+                password = registryPassword
+            }
+        }
+    }
+    container {
+        jvmFlags = ['-XX:MaxRAMPercentage=75.0', '-Djava.security.egd=file:/dev/./urandom']
+        mainClass = 'ru.mentee.power.CicdApplication'
+        ports = ['8080']
+        creationTime = 'USE_CURRENT_TIMESTAMP'
+        format = 'OCI'
+        environment = [
+            'SPRING_PROFILES_ACTIVE': 'production',
+            'APP_VERSION'           : project.version.toString()
+        ]
+        labels = [
+            'org.opencontainers.image.title'  : 'cicd-pipeline',
+            'org.opencontainers.image.version': project.version.toString()
+        ]
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
