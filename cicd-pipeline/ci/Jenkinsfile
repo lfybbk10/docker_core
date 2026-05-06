@@ -1,0 +1,137 @@
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        REGISTRY = 'ghcr.io'
+        IMAGE_NAME = 'cicd-pipeline'
+        IMAGE_REPOSITORY = 'ghcr.io/example/cicd-pipeline'
+        K8S_NAMESPACE = 'cicd-demo'
+        APP_VERSION = 'dev'
+    }
+
+    triggers {
+        gitlab(
+            triggerOnPush: true,
+            triggerOnMergeRequest: true,
+            branchFilterType: 'All'
+        )
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.IMAGE_NAME = env.JOB_NAME.replaceAll('/', '-')
+                    env.IMAGE_REPOSITORY = "${env.REGISTRY}/${env.IMAGE_NAME}"
+                    env.APP_VERSION = sh(script: "git describe --tags --always --dirty | sed 's/^v//'", returnStdout: true).trim()
+                }
+            }
+        }
+
+        stage('Verify') {
+            parallel {
+                stage('Tests') {
+                    steps {
+                        sh 'chmod +x gradlew && ./gradlew test'
+                    }
+                    post {
+                        always {
+                            junit 'build/test-results/test/*.xml'
+                        }
+                    }
+                }
+                stage('Package Preview') {
+                    steps {
+                        sh 'chmod +x gradlew && ./gradlew bootJar -x test'
+                    }
+                }
+            }
+        }
+
+        stage('Build with Jib') {
+            when {
+                anyOf {
+                    branch 'main'
+                    buildingTag()
+                }
+            }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'ghcr-credentials', usernameVariable: 'REGISTRY_USERNAME', passwordVariable: 'REGISTRY_PASSWORD')]) {
+                    sh '''
+                        chmod +x gradlew
+                        IMAGE_TAGS="latest,${APP_VERSION},${BUILD_NUMBER}" \
+                        IMAGE_REPOSITORY="${IMAGE_REPOSITORY}" \
+                        REGISTRY_USERNAME="${REGISTRY_USERNAME}" \
+                        REGISTRY_PASSWORD="${REGISTRY_PASSWORD}" \
+                        ./gradlew jib
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            when {
+                branch 'main'
+            }
+            environment {
+                KUBECONFIG = credentials('kubeconfig')
+            }
+            steps {
+                sh '''
+                    kubectl create namespace "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+                    kubectl -n "${K8S_NAMESPACE}" apply -f k8s/service.yaml
+                    kubectl -n "${K8S_NAMESPACE}" apply -f k8s/deployment.yaml
+                    kubectl -n "${K8S_NAMESPACE}" set image deployment/cicd-app cicd-app="${IMAGE_REPOSITORY}:${APP_VERSION}"
+                    kubectl -n "${K8S_NAMESPACE}" set env deployment/cicd-app APP_VERSION="${APP_VERSION}" DEPLOY_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                    kubectl -n "${K8S_NAMESPACE}" rollout status deployment/cicd-app --timeout=180s
+                '''
+            }
+            post {
+                failure {
+                    sh 'kubectl -n "${K8S_NAMESPACE}" rollout undo deployment/cicd-app'
+                }
+            }
+        }
+
+        stage('Health Check') {
+            when {
+                branch 'main'
+            }
+            steps {
+                sh '''
+                    kubectl -n "${K8S_NAMESPACE}" run health-check-${BUILD_NUMBER} \
+                      --image=curlimages/curl:8.7.1 \
+                      --restart=Never \
+                      --rm -i -- \
+                      curl -fsS http://cicd-app:8080/health
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Deployment ${APP_VERSION} completed successfully"
+        }
+        failure {
+            echo "Deployment ${APP_VERSION} failed"
+        }
+        always {
+            script {
+                if (env.SLACK_WEBHOOK_URL?.trim()) {
+                    sh """
+                        curl -X POST -H 'Content-type: application/json' \
+                          --data '{"text":"Jenkins pipeline ${JOB_NAME} #${BUILD_NUMBER} finished with status ${currentBuild.currentResult}"}' \
+                          "${SLACK_WEBHOOK_URL}"
+                    """
+                }
+            }
+        }
+    }
+}

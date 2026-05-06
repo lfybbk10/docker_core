@@ -1,0 +1,99 @@
+stages:
+  - verify
+  - image
+  - deploy
+  - verify_deploy
+  - notify
+
+variables:
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+  K8S_NAMESPACE: "cicd-demo"
+
+cache:
+  key: "${CI_COMMIT_REF_SLUG}"
+  paths:
+    - .gradle/
+
+unit-test:
+  stage: verify
+  image: eclipse-temurin:21-jdk
+  script:
+    - chmod +x gradlew
+    - ./gradlew test
+  artifacts:
+    when: always
+    reports:
+      junit: build/test-results/test/*.xml
+
+build-preview:
+  stage: verify
+  image: eclipse-temurin:21-jdk
+  script:
+    - chmod +x gradlew
+    - ./gradlew bootJar -x test
+  artifacts:
+    when: always
+    paths:
+      - build/libs/
+
+build-and-push:
+  stage: image
+  image: eclipse-temurin:21-jdk
+  needs: ["unit-test", "build-preview"]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_TAG'
+  before_script:
+    - chmod +x gradlew
+    - export APP_VERSION="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
+    - export IMAGE_REPOSITORY="${CI_REGISTRY_IMAGE}"
+    - export IMAGE_TAGS="latest,${APP_VERSION},${CI_COMMIT_SHORT_SHA}"
+    - export REGISTRY_USERNAME="${CI_REGISTRY_USER}"
+    - export REGISTRY_PASSWORD="${CI_REGISTRY_PASSWORD}"
+  script:
+    - ./gradlew jib
+
+deploy-main:
+  stage: deploy
+  image: bitnami/kubectl:latest
+  needs: ["build-and-push"]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  before_script:
+    - export APP_VERSION="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
+    - mkdir -p ~/.kube
+    - echo "$KUBE_CONFIG_B64" | base64 -d > ~/.kube/config
+  script:
+    - kubectl create namespace "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+    - kubectl -n "${K8S_NAMESPACE}" apply -f k8s/service.yaml
+    - kubectl -n "${K8S_NAMESPACE}" apply -f k8s/deployment.yaml
+    - kubectl -n "${K8S_NAMESPACE}" set image deployment/cicd-app cicd-app="${CI_REGISTRY_IMAGE}:${APP_VERSION}"
+    - kubectl -n "${K8S_NAMESPACE}" set env deployment/cicd-app APP_VERSION="${APP_VERSION}" DEPLOY_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    - kubectl -n "${K8S_NAMESPACE}" rollout status deployment/cicd-app --timeout=180s
+  after_script:
+    - if [ "$CI_JOB_STATUS" != "success" ]; then kubectl -n "${K8S_NAMESPACE}" rollout undo deployment/cicd-app; fi
+
+health-check:
+  stage: verify_deploy
+  image: bitnami/kubectl:latest
+  needs: ["deploy-main"]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  before_script:
+    - mkdir -p ~/.kube
+    - echo "$KUBE_CONFIG_B64" | base64 -d > ~/.kube/config
+  script:
+    - kubectl -n "${K8S_NAMESPACE}" run "health-check-${CI_PIPELINE_ID}" --image=curlimages/curl:8.7.1 --restart=Never --rm -i -- curl -fsS http://cicd-app:8080/health
+
+notify:
+  stage: notify
+  image: curlimages/curl:8.7.1
+  when: always
+  script:
+    - echo "Pipeline status: ${CI_PIPELINE_STATUS}"
+    - |
+      if [ -n "${SLACK_WEBHOOK_URL}" ]; then
+        curl -X POST -H 'Content-type: application/json' \
+          --data "{\"text\":\"GitLab pipeline ${CI_PIPELINE_ID} finished with status ${CI_PIPELINE_STATUS}\"}" \
+          "${SLACK_WEBHOOK_URL}"
+      fi
+
