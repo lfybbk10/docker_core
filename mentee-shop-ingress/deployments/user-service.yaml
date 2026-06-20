@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: mentee-shop
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+        - name: user-service
+          image: hashicorp/http-echo
+          args:
+            - "-text={\"service\":\"user-service\",\"status\":\"ok\"}"
+            - "-listen=:8080"
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: mentee-shop
+spec:
+  type: ClusterIP
+  selector:
+    app: user-service
+  ports:
+    - port: 8080
+      targetPort: 8080

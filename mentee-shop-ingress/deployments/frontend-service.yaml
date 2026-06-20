@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-service
+  namespace: mentee-shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend-service
+  template:
+    metadata:
+      labels:
+        app: frontend-service
+    spec:
+      containers:
+        - name: frontend-service
+          image: hashicorp/http-echo
+          args:
+            - "-text=frontend ok"
+            - "-listen=:3000"
+          ports:
+            - containerPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  namespace: mentee-shop
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend-service
+  ports:
+    - port: 3000
+      targetPort: 3000
